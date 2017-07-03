@@ -7,6 +7,19 @@
 
 //score reference: http://jsfiddle.net/JrLVD/
 
+@interface RFFuzzySearchObject : NSObject
+
+@property (nonatomic, assign) CGFloat charScore;
+@property (nonatomic, assign) NSInteger position;
+
+
+@end
+
+@implementation RFFuzzySearchObject
+
+
+@end
+
 #import "NSString+Score.h"
 
 static NSCharacterSet *s_separatorsCharacterSet = nil;
@@ -160,64 +173,101 @@ static NSCharacterSet *s_separatorsCharacterSet = nil;
 	NSUInteger wordLength = otherString.length;
 
 	NSUInteger idxOf(NSNotFound);
-	NSUInteger startAt = 0;
 	
 	CGFloat fuzzies(1), fuzzyFactor(0);
-	BOOL fuzzinessIsNil = YES;
 	
 	// Cache fuzzyFactor for speed increase
 	if (fuzziness) {
 		fuzzyFactor = 1 - [fuzziness doubleValue];
-		fuzzinessIsNil = NO;
 	}
 	
+	NSMutableArray <NSArray<RFFuzzySearchObject*>*>* searchResults = [NSMutableArray new];
+	
 	for (NSUInteger i = 0; i < wordLength; i++) {
-		// Find next first case-insensitive match of word's i-th character.
-		// The search in "string" begins at "startAt".
+		NSMutableArray <RFFuzzySearchObject*>* searchObjects = [NSMutableArray new];
 		
-		NSRange range = [lString rangeOfString:[lWord substringWithRange:NSMakeRange(i, 1)]
-									   options:NSCaseInsensitiveSearch
-										 range:NSMakeRange(startAt, strLength - startAt)
-										locale:nil];
-						 
-		if (range.location != NSNotFound) {
-			// start index of word's i-th character in string.
-			idxOf = range.location;
-			if (startAt == idxOf) {
-				// Consecutive letter & start-of-string Bonus
-				charScore = 0.7;
-			} else {
+		NSString* searchAlpha = [lWord substringWithRange:NSMakeRange(i, 1)];
+		
+		NSRange searchRange = NSMakeRange(0,string.length);
+		NSRange foundRange;
+		while (searchRange.location < string.length) {
+			searchRange.length = string.length - searchRange.location;
+			foundRange = [lString rangeOfString:searchAlpha options:NSCaseInsensitiveSearch range:searchRange];
+			if (foundRange.location != NSNotFound) {
+				// found an occurrence of the substring! do stuff here
+				searchRange.location = foundRange.location + 1;
+				RFFuzzySearchObject *searchObject = [RFFuzzySearchObject new];
+				searchObject.position = foundRange.location;
+				[searchObjects addObject:searchObject];
+					// start index of word's i-th character in string.
+				
+				
+				idxOf = foundRange.location;
+
 				charScore = 0.1;
 				
 				// Acronym Bonus
 				// Weighing Logic: Typing the first character of an acronym is as if you
 				// preceded it with two perfect character matches.
-				if ([s_separatorsCharacterSet characterIsMember:[string characterAtIndex:idxOf - 1]]) {
+				if (idxOf == 0 || [s_separatorsCharacterSet characterIsMember:[string characterAtIndex:idxOf - 1]]) {
 					charScore += 0.8;
 				}
-			}
-		}
-		else {
-			// Character not found.
-			if (fuzzinessIsNil) {
-				// Fuzziness is nil. Return 0.
-				return 0;
-			}
-			else {
-				fuzzies += fuzzyFactor;
-				continue;
+				
+				// Same case bonus.
+				if ([string characterAtIndex:idxOf] == [otherString characterAtIndex:i]) {
+					charScore += 0.1;
+				}
+				
+				searchObject.charScore = charScore;
+				
+			} else {
+				if(searchObjects.count == 0){
+					// Character not found
+					fuzzies += fuzzyFactor;
+				}
+				break;
 			}
 		}
 		
-		// Same case bonus.
-		if ([string characterAtIndex:idxOf] == [otherString characterAtIndex:i]) {
-			charScore += 0.1;
+		if(searchObjects.count){
+			[searchResults addObject:searchObjects];
 		}
-		
-		// Update scores and startAt position for next round of indexOf
-		runningScore += charScore;
-		startAt = idxOf + 1;
 	}
+	
+	//calculate score
+	if(searchResults.count){
+		runningScore = 0;
+		NSArray <RFFuzzySearchObject*>* topSearchObjects = searchResults[0];
+		NSInteger startAt;
+		NSArray <RFFuzzySearchObject*>* searchObjects;
+		CGFloat result;
+		for(int i = 0; i < topSearchObjects.count;i++){
+			RFFuzzySearchObject* topSearchObject = topSearchObjects[i];
+			startAt = topSearchObject.position + 1;
+			result = topSearchObject.charScore;
+			if (startAt == topSearchObject.position) {
+				result += 0.7;
+			}
+			for(int j = 1; j < searchResults.count; j++){
+				searchObjects = searchResults[j];
+				for(int k = 0; k < searchObjects.count; k++){
+					RFFuzzySearchObject* searchObject = searchObjects[k];
+					if(searchObject.position >= startAt){
+						result += searchObject.charScore;
+						if (startAt == searchObject.position) {
+							result += 0.7;
+						}
+						startAt = searchObject.position + 1;
+						break;
+					}
+				}
+			}
+			if(runningScore < result){
+				runningScore = result;
+			}
+		}
+	}
+	
 	
 	// Reduce penalty for longer strings.
 	finalScore = 0.5 * (runningScore / strLength + runningScore / wordLength) / fuzzies;
@@ -228,4 +278,5 @@ static NSCharacterSet *s_separatorsCharacterSet = nil;
 	
 	return finalScore;
 }
+
 @end
