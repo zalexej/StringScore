@@ -10,7 +10,7 @@
 @interface RFFuzzySearchObject : NSObject
 
 @property (nonatomic, assign) CGFloat charScore;
-@property (nonatomic, assign) NSInteger position;
+@property (nonatomic, assign) NSUInteger position;
 
 
 @end
@@ -145,7 +145,7 @@ static NSCharacterSet *s_separatorsCharacterSet = nil;
 
 
 // ported from https://github.com/zalexej/StringScore_Swift.git
-- (CGFloat) scoreWithString:(NSString *)otherString fuzziness:(NSNumber *)fuzziness
+- (CGFloat) scoreWithString:(NSString *)otherString fuzziness:(NSNumber *)fuzziness positionArray:(NSArray<NSNumber*>**)positionsArray
 {
 	// If the string is equal to the word, perfect match.
 	if ([self isEqualToString:otherString]) {
@@ -234,20 +234,24 @@ static NSCharacterSet *s_separatorsCharacterSet = nil;
 		}
 	}
 	
+	NSArray<NSNumber*> *scorePositionsArray = [NSArray new];
+	
 	//calculate score
 	if(searchResults.count){
 		runningScore = 0;
 		NSArray <RFFuzzySearchObject*>* topSearchObjects = searchResults[0];
-		NSInteger startAt;
+		NSUInteger startAt;
 		NSArray <RFFuzzySearchObject*>* searchObjects;
 		CGFloat result;
 		for(int i = 0; i < topSearchObjects.count;i++){
+			NSMutableArray<NSNumber*> *localScorePositionsArray = [NSMutableArray new];
 			RFFuzzySearchObject* topSearchObject = topSearchObjects[i];
 			startAt = topSearchObject.position + 1;
 			result = topSearchObject.charScore;
 			if (startAt == topSearchObject.position) {
 				result += 0.7;
 			}
+			[localScorePositionsArray addObject:@(topSearchObject.position)];
 			for(int j = 1; j < searchResults.count; j++){
 				searchObjects = searchResults[j];
 				for(int k = 0; k < searchObjects.count; k++){
@@ -258,16 +262,19 @@ static NSCharacterSet *s_separatorsCharacterSet = nil;
 							result += 0.7;
 						}
 						startAt = searchObject.position + 1;
+						[localScorePositionsArray addObject:@(searchObject.position)];
 						break;
 					}
 				}
 			}
 			if(runningScore < result){
+				scorePositionsArray = localScorePositionsArray;
 				runningScore = result;
 			}
 		}
 	}
 	
+	(*positionsArray) = scorePositionsArray;
 	
 	// Reduce penalty for longer strings.
 	finalScore = 0.5 * (runningScore / strLength + runningScore / wordLength) / fuzzies;
