@@ -7,6 +7,13 @@
 
 //score reference: http://jsfiddle.net/JrLVD/
 
+#define fuzzyLengthConstant 0.5
+#define fuzzyNeighbor 0.7
+#define fuzzyFirstCharacter 0.8
+#define fuzzyCharacter 0.1
+#define fuzzySameCase 0.1
+
+
 @interface RFFuzzySearchObject : NSObject
 
 @property (nonatomic, assign) CGFloat charScore;
@@ -149,6 +156,11 @@ static NSCharacterSet *s_separatorsCharacterSet = nil;
 {
 	// If the string is equal to the word, perfect match.
 	if ([self isEqualToString:otherString]) {
+		NSMutableArray<NSNumber*> *localScorePositionsArray = [NSMutableArray new];
+		for(int i = 0;i<self.length;i++){
+			[localScorePositionsArray addObject:@(i)];
+		}
+		(*positionsArray) = localScorePositionsArray;
 		return 1;
 	}
 	
@@ -204,18 +216,18 @@ static NSCharacterSet *s_separatorsCharacterSet = nil;
 				
 				idxOf = foundRange.location;
 
-				charScore = 0.1;
+				charScore = fuzzyCharacter;
 				
 				// Acronym Bonus
 				// Weighing Logic: Typing the first character of an acronym is as if you
 				// preceded it with two perfect character matches.
 				if (idxOf == 0 || [s_separatorsCharacterSet characterIsMember:[string characterAtIndex:idxOf - 1]]) {
-					charScore += 0.8;
+					charScore += fuzzyFirstCharacter;
 				}
 				
 				// Same case bonus.
 				if ([string characterAtIndex:idxOf] == [otherString characterAtIndex:i]) {
-					charScore += 0.1;
+					charScore += fuzzySameCase;
 				}
 				
 				searchObject.charScore = charScore;
@@ -249,7 +261,7 @@ static NSCharacterSet *s_separatorsCharacterSet = nil;
 			startAt = topSearchObject.position + 1;
 			result = topSearchObject.charScore;
 			if (startAt == topSearchObject.position) {
-				result += 0.7;
+				result += fuzzyNeighbor;
 			}
 			[localScorePositionsArray addObject:@(topSearchObject.position)];
 			for(int j = 1; j < searchResults.count; j++){
@@ -259,7 +271,7 @@ static NSCharacterSet *s_separatorsCharacterSet = nil;
 					if(searchObject.position >= startAt){
 						result += searchObject.charScore;
 						if (startAt == searchObject.position) {
-							result += 0.7;
+							result += fuzzyNeighbor;
 						}
 						startAt = searchObject.position + 1;
 						[localScorePositionsArray addObject:@(searchObject.position)];
@@ -277,10 +289,27 @@ static NSCharacterSet *s_separatorsCharacterSet = nil;
 	(*positionsArray) = scorePositionsArray;
 	
 	// Reduce penalty for longer strings.
-	finalScore = 0.5 * (runningScore / strLength + runningScore / wordLength) / fuzzies;
+	finalScore = fuzzyLengthConstant * (runningScore / strLength + runningScore / wordLength) / fuzzies;
 	
 	if (([lWord characterAtIndex:0] == [lString characterAtIndex:0]) && (finalScore < 0.85)) {
 		finalScore += 0.15;
+	}
+	return finalScore;
+}
+
+- (CGFloat)scoreDomainWithString:(NSString *)otherString fuzziness:(NSNumber *)fuzziness positionsRange:(NSArray<NSNumber*>**)positionsArray
+{
+	CGFloat runningScore = 0;
+	CGFloat finalScore = 0;
+	NSString *string = self;
+	NSRange stringRange = [string rangeOfString:otherString options:NSCaseInsensitiveSearch];
+	if(stringRange.location != NSNotFound){
+		runningScore = otherString.length * fuzzyCharacter + (otherString.length - 1) * fuzzyNeighbor;
+		if (stringRange.location) {
+			runningScore += fuzzyFirstCharacter;
+		}
+		finalScore = fuzzyLengthConstant * (runningScore / string.length + runningScore / otherString.length);
+		(*positionsArray) = @[@(stringRange.location),@(stringRange.length)];
 	}
 	
 	return finalScore;

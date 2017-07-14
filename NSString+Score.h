@@ -22,5 +22,6 @@ typedef NSUInteger NSStringScoreOption;
 - (CGFloat) scoreAgainst:(NSString *)otherString fuzziness:(NSNumber *)fuzziness options:(NSStringScoreOption)options;
 
 - (CGFloat) scoreWithString:(NSString *)otherString fuzziness:(NSNumber *)fuzziness positionArray:(NSArray<NSNumber*>**)positionsArray;
+- (CGFloat) scoreDomainWithString:(NSString *)otherString fuzziness:(NSNumber *)fuzziness positionsRange:(NSArray<NSNumber*>**)positionsArray;
 
 @end
